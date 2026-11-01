@@ -13,16 +13,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # STEP 1: Buat ulang konfigurasi Gradle dari nol
       - name: Create Clean Gradle Configuration
         run: |
-          set -e
-
-          echo "Membersihkan konfigurasi Gradle lama..."
           rm -f settings.gradle settings.gradle.kts
           rm -f build.gradle build.gradle.kts
           rm -f app/build.gradle app/build.gradle.kts
-
           mkdir -p app/src/main/java/com/mxq/islami/launcher
           mkdir -p app/src/main/res/layout
 
@@ -34,7 +29,6 @@ jobs:
                   gradlePluginPortal()
               }
           }
-
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
@@ -42,7 +36,6 @@ jobs:
                   mavenCentral()
               }
           }
-
           rootProject.name = "mxq-pro-rk322a-islami"
           include ':app'
           EOF
@@ -53,20 +46,15 @@ jobs:
           }
           EOF
 
-          echo "Konfigurasi Gradle berhasil dibuat."
-
-      # STEP 2: Buat konfigurasi Android App
       - name: Create App Gradle Configuration
         run: |
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.1.4'
           }
-
           android {
               namespace 'com.mxq.islami.launcher'
               compileSdk 34
-
               defaultConfig {
                   applicationId 'com.mxq.islami.launcher'
                   minSdk 21
@@ -74,110 +62,71 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
           EOF
 
-      # STEP 3: Cari dan copy MainActivity.java
-      - name: Copy MainActivity Automatically
+      - name: Copy MainActivity
         run: |
-          set -e
-
-          SOURCE=$(find IslamiLauncher -type f -name "MainActivity.java" | head -n 1)
-
-          if [ -z "$SOURCE" ]; then
-            echo "ERROR: MainActivity.java tidak ditemukan!"
-            exit 1
-          fi
-
-          echo "MainActivity ditemukan: $SOURCE"
-
+          SOURCE=$(find IslamiLauncher -type f -name "*.java" | head -n 1)
+          echo "Source: $SOURCE"
           cp "$SOURCE" app/src/main/java/com/mxq/islami/launcher/MainActivity.java
+          # hapus package lama biar tidak dobel
+          sed -i '/^package/d' app/src/main/java/com/mxq/islami/launcher/MainActivity.java
+          sed -i '1i package com.mxq.islami.launcher;' app/src/main/java/com/mxq/islami/launcher/MainActivity.java
 
-          echo "package com.mxq.islami.launcher;" > /tmp/MainActivity.java
-          echo "" >> /tmp/MainActivity.java
-          cat app/src/main/java/com/mxq/islami/launcher/MainActivity.java >> /tmp/MainActivity.java
-          mv /tmp/MainActivity.java app/src/main/java/com/mxq/islami/launcher/MainActivity.java
-
-      # STEP 4: Copy layout jika tersedia
-      - name: Copy Android Layout
+      - name: Copy Layout
         run: |
-          LAYOUT=$(find IslamiLauncher -type f -name "layout_activity_main.xml" | head -n 1)
-
+          LAYOUT=$(find IslamiLauncher -type f -name "*.xml" | head -n 1)
           if [ -n "$LAYOUT" ]; then
             cp "$LAYOUT" app/src/main/res/layout/activity_main.xml
-            echo "Layout berhasil disalin."
           else
-            echo "Layout tidak ditemukan, membuat layout default."
-            cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center">
-          </LinearLayout>
-          EOF
+            echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"/>' > app/src/main/res/layout/activity_main.xml
           fi
 
-      # STEP 5: Buat AndroidManifest
       - name: Create Android Manifest
         run: |
-          mkdir -p app/src/main
-
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
               <application
                   android:allowBackup="true"
                   android:label="MXQ Pro Islami"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar">
-
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
-
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-
                   </activity>
-
               </application>
           </manifest>
           EOF
 
-      # STEP 6: Setup Java 17
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # STEP 7: Setup Gradle 8.5
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      # STEP 8: Build APK
       - name: Build Debug APK
-        run: |
-          gradle --version
-          gradle clean
-          gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
-      # STEP 9: Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MXQ-Pro-RK322A-Islami-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
