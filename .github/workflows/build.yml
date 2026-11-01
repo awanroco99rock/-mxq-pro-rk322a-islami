@@ -12,18 +12,28 @@ jobs:
 
       - name: Buat Struktur Project Otomatis
         run: |
+          rm -f build.gradle settings.gradle
           mkdir -p app/src/main/java/com/mxq/islami/launcher
           mkdir -p app/src/main/res/layout
-          mkdir -p gradle/wrapper
           
-          echo "include ':app'" > settings.gradle
+          cat > settings.gradle << 'EOF'
+          include ':app'
+          EOF
           
-          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.1.4' } } allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          cat > build.gradle << 'EOF'
+          // Top-level build file
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
           
           cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application' version '8.1.4' apply true
+          }
           android {
               compileSdk 33
+              namespace "com.mxq.islami.launcher"
               defaultConfig {
                   applicationId "com.mxq.islami.launcher"
                   minSdk 21
@@ -31,7 +41,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              namespace "com.mxq.islami.launcher"
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.4.2'
@@ -54,7 +63,6 @@ jobs:
           </manifest>
           EOF
           
-          # Pakai file abang kalo ada, kalo gak bikin dummy
           cp IslamiLauncher/MainActivity.java app/src/main/java/com/mxq/islami/launcher/ 2>/dev/null || echo "package com.mxq.islami.launcher; import android.app.Activity; import android.os.Bundle; public class MainActivity extends Activity { protected void onCreate(Bundle b){super.onCreate(b);} }" > app/src/main/java/com/mxq/islami/launcher/MainActivity.java
           cp IslamiLauncher/layout_activity_main.xml app/src/main/res/layout/activity_main.xml 2>/dev/null || echo '<?xml version="1.0"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Islami Launcher"/></LinearLayout>' > app/src/main/res/layout/activity_main.xml
 
@@ -64,7 +72,7 @@ jobs:
           gradle-version: 8.5
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
