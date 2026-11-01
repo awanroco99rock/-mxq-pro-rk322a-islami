@@ -1,4 +1,4 @@
-name: Build APK FIX 100%
+name: Build APK
 on: [push]
 jobs:
   build:
@@ -11,26 +11,62 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Buat 3 file yang hilang (ini obatnya)
+      - name: HAPUS file lama yang bikin merah + Buat baru
         run: |
-          echo 'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } } include ":app"' > settings.gradle
-          echo 'task clean(type: Delete) { delete rootProject.buildDir }' > build.gradle
+          rm -rf settings.gradle settings.gradle.kts build.gradle build.gradle.kts .gradle
+          rm -rf app/build.gradle app/build.gradle.kts
+          echo "include ':app'" > settings.gradle
+          echo "task clean(type: Delete) { delete rootProject.buildDir }" > build.gradle
           mkdir -p app/src/main/java/com/mxq/islami/launcher
           mkdir -p app/src/main/res/layout
-          echo 'plugins { id "com.android.application" version "8.1.4" apply true } android { namespace "com.mxq.islami.launcher"; compileSdk 34; defaultConfig { applicationId "com.mxq.islami.launcher"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0" } compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 } } dependencies { implementation "androidx.appcompat:appcompat:1.6.1" }' > app/build.gradle
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="Islami MXQ PRO"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.1.4' }
+          android {
+              namespace 'com.mxq.islami.launcher'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.mxq.islami.launcher"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="Islami MXQ PRO">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                          <category android:name="android.intent.category.HOME"/>
+                          <category android:name="android.intent.category.DEFAULT"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
           if [ -f IslamiLauncher/MainActivity.java ]; then cp IslamiLauncher/MainActivity.java app/src/main/java/com/mxq/islami/launcher/MainActivity.java; fi
+          if [ -f app/src/main/java/com/mxq/islami/launcher/MainActivity.java ]; then echo "MainActivity ketemu"; else echo 'package com.mxq.islami.launcher; import android.app.Activity; import android.os.Bundle; public class MainActivity extends Activity { protected void onCreate(Bundle b){ super.onCreate(b); } }' > app/src/main/java/com/mxq/islami/launcher/MainActivity.java; fi
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Islami-MXQ-PRO-FIX100
+          name: Islami-MXQ-PRO-FIX
           path: app/build/outputs/apk/debug/*.apk
