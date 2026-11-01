@@ -1,9 +1,10 @@
-```yaml
 name: Build MXQ Pro RK322A Islami APK
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -11,12 +12,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Bersihkan dan buat konfigurasi Gradle
-      - name: Create Clean Gradle Configuration
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Create Gradle Configuration
         shell: bash
         run: |
           set -e
@@ -27,6 +37,7 @@ jobs:
 
           mkdir -p app/src/main/java/com/mxq/islami/launcher
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -55,19 +66,12 @@ jobs:
           }
           EOF
 
-      # 3. Aktifkan AndroidX
-      - name: Configure AndroidX
-        run: |
           cat > gradle.properties <<'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          org.gradle.parallel=true
           EOF
 
-      # 4. Konfigurasi Android App
-      - name: Create App Gradle Configuration
-        run: |
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.1.4'
@@ -96,20 +100,17 @@ jobs:
           }
           EOF
 
-      # 5. Cari dan copy MainActivity.java
       - name: Copy MainActivity
         shell: bash
         run: |
           set -e
 
-          SOURCE=$(find IslamiLauncher -type f -name "MainActivity.java" | head -n 1)
+          SOURCE=$(find IslamiLauncher -type f -name MainActivity.java | head -n 1)
 
           if [ -z "$SOURCE" ]; then
-            echo "ERROR: MainActivity.java tidak ditemukan!"
+            echo "ERROR: MainActivity.java tidak ditemukan"
             exit 1
           fi
-
-          echo "File ditemukan: $SOURCE"
 
           DEST="app/src/main/java/com/mxq/islami/launcher/MainActivity.java"
 
@@ -123,89 +124,60 @@ jobs:
             mv "$TEMP" "$DEST"
           fi
 
-          echo "MainActivity berhasil disalin."
+          echo "MainActivity berhasil disalin"
 
-      # 6. Copy layout XML
-      - name: Copy Layout XML
+      - name: Copy Layout
         shell: bash
         run: |
-          LAYOUT=$(find IslamiLauncher -type f -name "layout_activity_main.xml" | head -n 1)
+          LAYOUT=$(find IslamiLauncher -type f -name layout_activity_main.xml | head -n 1)
 
           if [ -n "$LAYOUT" ]; then
             cp "$LAYOUT" app/src/main/res/layout/activity_main.xml
-            echo "Layout berhasil disalin."
           else
-            echo "Layout tidak ditemukan, membuat layout default."
-
             cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:gravity="center">
-          </LinearLayout>
+              android:gravity="center" />
           EOF
           fi
 
-      # 7. Android Manifest
       - name: Create Android Manifest
         run: |
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
               <application
                   android:allowBackup="true"
                   android:label="MXQ Pro Islami"
                   android:theme="@style/AppTheme">
-
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
-
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-
                   </activity>
               </application>
           </manifest>
           EOF
 
-          mkdir -p app/src/main/res/values
-
           cat > app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorAccent">#008577</item>
-              </style>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
           </resources>
           EOF
 
-      # 8. Setup Java 17
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # 9. Setup Gradle 8.5
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      # 10. Build APK
       - name: Build Debug APK
         run: |
           gradle --version
           gradle clean
           gradle assembleDebug --stacktrace
 
-      # 11. Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -213,4 +185,3 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
-```
