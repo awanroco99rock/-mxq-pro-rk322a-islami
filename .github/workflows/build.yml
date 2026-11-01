@@ -1,72 +1,183 @@
-name: Build APK
-on: [push]
+name: Build MXQ Pro RK322A Islami APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
 
-      - name: HAPUS file lama yang bikin merah + Buat baru
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # STEP 1: Buat ulang konfigurasi Gradle dari nol
+      - name: Create Clean Gradle Configuration
         run: |
-          rm -rf settings.gradle settings.gradle.kts build.gradle build.gradle.kts .gradle
-          rm -rf app/build.gradle app/build.gradle.kts
-          echo "include ':app'" > settings.gradle
-          echo "task clean(type: Delete) { delete rootProject.buildDir }" > build.gradle
+          set -e
+
+          echo "Membersihkan konfigurasi Gradle lama..."
+          rm -f settings.gradle settings.gradle.kts
+          rm -f build.gradle build.gradle.kts
+          rm -f app/build.gradle app/build.gradle.kts
+
           mkdir -p app/src/main/java/com/mxq/islami/launcher
           mkdir -p app/src/main/res/layout
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "mxq-pro-rk322a-islami"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          tasks.register('clean', Delete) {
+              delete rootProject.layout.buildDirectory
+          }
+          EOF
+
+          echo "Konfigurasi Gradle berhasil dibuat."
+
+      # STEP 2: Buat konfigurasi Android App
+      - name: Create App Gradle Configuration
+        run: |
           cat > app/build.gradle <<'EOF'
-          plugins { id 'com.android.application' version '8.1.4' }
+          plugins {
+              id 'com.android.application' version '8.1.4'
+          }
+
           android {
               namespace 'com.mxq.islami.launcher'
               compileSdk 34
+
               defaultConfig {
-                  applicationId "com.mxq.islami.launcher"
+                  applicationId 'com.mxq.islami.launcher'
                   minSdk 21
-                  targetSdk 34
+                  targetSdk 28
                   versionCode 1
-                  versionName "1.0"
+                  versionName '1.0'
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
           EOF
+
+      # STEP 3: Cari dan copy MainActivity.java
+      - name: Copy MainActivity Automatically
+        run: |
+          set -e
+
+          SOURCE=$(find IslamiLauncher -type f -name "MainActivity.java" | head -n 1)
+
+          if [ -z "$SOURCE" ]; then
+            echo "ERROR: MainActivity.java tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "MainActivity ditemukan: $SOURCE"
+
+          cp "$SOURCE" app/src/main/java/com/mxq/islami/launcher/MainActivity.java
+
+          echo "package com.mxq.islami.launcher;" > /tmp/MainActivity.java
+          echo "" >> /tmp/MainActivity.java
+          cat app/src/main/java/com/mxq/islami/launcher/MainActivity.java >> /tmp/MainActivity.java
+          mv /tmp/MainActivity.java app/src/main/java/com/mxq/islami/launcher/MainActivity.java
+
+      # STEP 4: Copy layout jika tersedia
+      - name: Copy Android Layout
+        run: |
+          LAYOUT=$(find IslamiLauncher -type f -name "layout_activity_main.xml" | head -n 1)
+
+          if [ -n "$LAYOUT" ]; then
+            cp "$LAYOUT" app/src/main/res/layout/activity_main.xml
+            echo "Layout berhasil disalin."
+          else
+            echo "Layout tidak ditemukan, membuat layout default."
+            cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center">
+          </LinearLayout>
+          EOF
+          fi
+
+      # STEP 5: Buat AndroidManifest
+      - name: Create Android Manifest
+        run: |
+          mkdir -p app/src/main
+
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="Islami MXQ PRO">
-                  <activity android:name=".MainActivity" android:exported="true">
+
+              <application
+                  android:allowBackup="true"
+                  android:label="MXQ Pro Islami"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                          <category android:name="android.intent.category.HOME"/>
-                          <category android:name="android.intent.category.DEFAULT"/>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
+
                   </activity>
+
               </application>
           </manifest>
           EOF
-          if [ -f IslamiLauncher/MainActivity.java ]; then cp IslamiLauncher/MainActivity.java app/src/main/java/com/mxq/islami/launcher/MainActivity.java; fi
-          if [ -f app/src/main/java/com/mxq/islami/launcher/MainActivity.java ]; then echo "MainActivity ketemu"; else echo 'package com.mxq.islami.launcher; import android.app.Activity; import android.os.Bundle; public class MainActivity extends Activity { protected void onCreate(Bundle b){ super.onCreate(b); } }' > app/src/main/java/com/mxq/islami/launcher/MainActivity.java; fi
 
-      - uses: gradle/actions/setup-gradle@v3
+      # STEP 6: Setup Java 17
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
-          gradle-version: 8.5
+          distribution: temurin
+          java-version: '17'
 
-      - name: Build APK
-        run: gradle assembleDebug --stacktrace
+      # STEP 7: Setup Gradle 8.5
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
 
-      - name: Upload APK
+      # STEP 8: Build APK
+      - name: Build Debug APK
+        run: |
+          gradle --version
+          gradle clean
+          gradle assembleDebug --stacktrace
+
+      # STEP 9: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Islami-MXQ-PRO-FIX
-          path: app/build/outputs/apk/debug/*.apk
+          name: MXQ-Pro-RK322A-Islami-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
