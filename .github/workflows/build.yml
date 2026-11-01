@@ -9,13 +9,13 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Build APK MXQ
-        uses: android-actions/setup-android@v3
-      - name: Make Gradle Build
-        run: |
-          chmod +x ./gradlew || gradle wrapper --gradle-version 8.5
-          ./gradlew assembleDebug
-      - name: Upload APK
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+      - name: Build APK
+        run: gradle assembleDebug
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Islami-MXQ-PRO-APK
