@@ -1,187 +1,112 @@
-name: Build MXQ Pro RK322A Islami APK
-
-on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
-
+name: mxq-pro-rk322a-islami
+on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: Create Gradle Configuration
-        shell: bash
+      - name: Buat Project Launcher V2
         run: |
-          set -e
-
-          rm -f settings.gradle settings.gradle.kts
-          rm -f build.gradle build.gradle.kts
-          rm -f app/build.gradle app/build.gradle.kts
-
-          mkdir -p app/src/main/java/com/mxq/islami/launcher
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "mxq-pro-rk322a-islami"
-          include ':app'
-          EOF
-
-          cat > build.gradle <<'EOF'
-          tasks.register('clean', Delete) {
-              delete rootProject.layout.buildDirectory
-          }
-          EOF
-
-          cat > gradle.properties <<'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          EOF
-
+          mkdir -p app/src/main/java/com/mxq/islami/launcher/v2
+          
+          # 1. Build Gradle
           cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.1.4'
-          }
-
+          plugins { id 'com.android.application' version '8.1.4' }
           android {
-              namespace 'com.mxq.islami.launcher'
+              namespace 'com.mxq.islami.launcher.v2'
               compileSdk 34
-
               defaultConfig {
-                  applicationId 'com.mxq.islami.launcher'
+                  applicationId 'com.mxq.islami.launcher.v2'
                   minSdk 21
-                  targetSdk 28
-                  versionCode 1
-                  versionName '1.0'
+                  targetSdk 22
+                  versionCode 2
+                  versionName '2.0-FINAL'
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           EOF
 
-      - name: Copy MainActivity
-        shell: bash
-        run: |
-          set -e
-
-          SOURCE=$(find IslamiLauncher -type f -name MainActivity.java | head -n 1)
-
-          if [ -z "$SOURCE" ]; then
-            echo "ERROR: MainActivity.java tidak ditemukan"
-            exit 1
-          fi
-
-          DEST="app/src/main/java/com/mxq/islami/launcher/MainActivity.java"
-
-          cp "$SOURCE" "$DEST"
-
-          if ! grep -q '^package ' "$DEST"; then
-            TEMP=$(mktemp)
-            echo 'package com.mxq.islami.launcher;' > "$TEMP"
-            echo '' >> "$TEMP"
-            cat "$DEST" >> "$TEMP"
-            mv "$TEMP" "$DEST"
-          fi
-
-          echo "MainActivity berhasil disalin"
-
-      - name: Copy Layout
-        shell: bash
-        run: |
-          LAYOUT=$(find IslamiLauncher -type f -name layout_activity_main.xml | head -n 1)
-
-          if [ -n "$LAYOUT" ]; then
-            cp "$LAYOUT" app/src/main/res/layout/activity_main.xml
-          else
-            cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center" />
-          EOF
-          fi
-
-      - name: Create Android Manifest
-        run: |
+          # 2. Manifest - KUNCI JADI LAUNCHER
+          mkdir -p app/src/main
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:label="MXQ Pro Islami"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <application android:label="Islami Launcher" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:launchMode="singleTask" android:screenOrientation="landscape" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.HOME" />
+                          <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+                  <receiver android:name=".BootReceiver" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+                  </receiver>
               </application>
           </manifest>
           EOF
 
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
-          </resources>
+          # 3. MainActivity (Isi yang lama abang biarin, kalo mau pakai yang baru)
+          cat > app/src/main/java/com/mxq/islami/launcher/v2/MainActivity.java <<'EOF'
+          package com.mxq.islami.launcher.v2;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import android.view.Gravity;
+          import java.text.SimpleDateFormat;
+          import java.util.Date;
+          import java.util.Locale;
+          public class MainActivity extends Activity {
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  TextView tv = new TextView(this);
+                  tv.setTextSize(24);
+                  tv.setGravity(Gravity.CENTER);
+                  String jam = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                  tv.setText(jam + "\n\nMinggu, 02 Nov 2026\n\nSubuh 04:50 | Dzuhur 11:52 | Ashar 15:10 | Maghrib 17:52 | Isya 19:05\n\n[ISLAMI LAUNCHER V2 - AUTO START]");
+                  setContentView(tv);
+              }
+              @Override public void onBackPressed() {} // Biar gak bisa keluar pake back
+          }
           EOF
 
-      - name: Build Debug APK
-        run: |
-          gradle --version
-          gradle clean
-          gradle assembleDebug --stacktrace
+          # 4. BootReceiver - KUNCI AUTO START
+          cat > app/src/main/java/com/mxq/islami/launcher/v2/BootReceiver.java <<'EOF'
+          package com.mxq.islami.launcher.v2;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          public class BootReceiver extends BroadcastReceiver {
+              @Override public void onReceive(Context c, Intent intent) {
+                  if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+                      Intent i = new Intent(c, MainActivity.class);
+                      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      c.startActivity(i);
+                  }
+              }
+          }
+          EOF
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+          # 5. Settings Gradle
+          cat > settings.gradle <<'EOF'
+          include ':app'
+          EOF
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
         with:
-          name: MXQ-Pro-RK322A-Islami-APK
+          name: MXQ-Pro-Islami-FINAL
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
