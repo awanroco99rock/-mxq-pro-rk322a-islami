@@ -1,4 +1,5 @@
-name: MXQ Pro RK322A Islami Launcher V2
+
+name: MXQ Pro Islami Launcher V3 Black Gold
 
 on:
   push:
@@ -6,6 +7,9 @@ on:
       - main
       - master
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -16,21 +20,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Setup Java
+      # 2. Java 17
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # 3. Setup Gradle
-      - name: Setup Gradle 8.5
+      # 3. Gradle 8.5
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      # 4. Buat konfigurasi Gradle
-      - name: Create Gradle Project
+      # 4. Create Gradle Project
+      - name: Create Project Configuration
         shell: bash
         run: |
           set -e
@@ -39,7 +43,7 @@ jobs:
           rm -f build.gradle build.gradle.kts
           rm -rf app
 
-          mkdir -p app/src/main/java/com/mxq/islami/launcher/v2
+          mkdir -p app/src/main/java/com/mxq/islami/launcher/v3
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -74,8 +78,8 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-      # 5. App V2 configuration
-      - name: Create App Gradle
+      # 5. App Configuration
+      - name: Create App Configuration
         run: |
           cat > app/build.gradle <<'EOF'
           plugins {
@@ -83,15 +87,15 @@ jobs:
           }
 
           android {
-              namespace 'com.mxq.islami.launcher.v2'
+              namespace 'com.mxq.islami.launcher.v3'
               compileSdk 34
 
               defaultConfig {
-                  applicationId 'com.mxq.islami.launcher.v2'
+                  applicationId 'com.mxq.islami.launcher.v3'
                   minSdk 21
                   targetSdk 22
-                  versionCode 2
-                  versionName '2.0-FINAL'
+                  versionCode 3
+                  versionName '3.0'
               }
 
               compileOptions {
@@ -101,103 +105,422 @@ jobs:
           }
           EOF
 
-      # 6. MainActivity
+      # 6. Main Activity
       - name: Create MainActivity
         run: |
-          cat > app/src/main/java/com/mxq/islami/launcher/v2/MainActivity.java <<'EOF'
-          package com.mxq.islami.launcher.v2;
+          cat > app/src/main/java/com/mxq/islami/launcher/v3/MainActivity.java <<'EOF'
+          package com.mxq.islami.launcher.v3;
 
           import android.app.Activity;
           import android.os.Bundle;
-          import android.widget.TextView;
+          import android.os.Handler;
+          import android.content.Intent;
+          import android.content.pm.PackageInfo;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
           import android.view.Gravity;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+          import android.widget.GridLayout;
+
+          import org.json.JSONObject;
+
+          import java.net.URL;
+          import java.net.HttpURLConnection;
           import java.text.SimpleDateFormat;
           import java.util.Date;
           import java.util.Locale;
+          import java.util.List;
 
           public class MainActivity extends Activity {
+
+              private final int BLACK = Color.rgb(12, 12, 14);
+              private final int PANEL = Color.rgb(27, 26, 29);
+              private final int GOLD = Color.rgb(218, 178, 90);
+              private final int WHITE = Color.WHITE;
+              private final int MUTED = Color.rgb(180, 174, 160);
+
+              private TextView clock;
+              private TextView date;
+              private TextView hijri;
+              private TextView prayer;
+              private Handler handler = new Handler();
+
+              private final Runnable clockRunnable = new Runnable() {
+                  @Override
+                  public void run() {
+                      if (clock != null) {
+                          clock.setText(new SimpleDateFormat(
+                              "HH:mm:ss", Locale.getDefault()
+                          ).format(new Date()));
+                      }
+                      handler.postDelayed(this, 1000);
+                  }
+              };
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  TextView tv = new TextView(this);
-                  tv.setTextSize(24);
-                  tv.setGravity(Gravity.CENTER);
+                  getWindow().setStatusBarColor(BLACK);
+                  getWindow().setNavigationBarColor(BLACK);
 
-                  String tanggal = new SimpleDateFormat(
-                      "EEEE, dd MMMM yyyy",
-                      new Locale("id", "ID")
-                  ).format(new Date());
+                  buildInterface();
+                  loadPrayerTimes();
+              }
 
-                  String jam = new SimpleDateFormat(
-                      "HH:mm:ss",
-                      Locale.getDefault()
-                  ).format(new Date());
+              private GradientDrawable background(int color) {
+                  GradientDrawable d = new GradientDrawable();
+                  d.setColor(color);
+                  d.setCornerRadius(18);
+                  d.setStroke(2, GOLD);
+                  return d;
+              }
 
-                  tv.setText(
-                      "ISLAMI LAUNCHER V2\n\n"
-                      + tanggal + "\n"
-                      + jam + "\n\n"
-                      + "JADWAL SHOLAT\n\n"
-                      + "Subuh     04:50\n"
-                      + "Dzuhur    11:52\n"
-                      + "Ashar     15:10\n"
-                      + "Maghrib   17:52\n"
-                      + "Isya      19:05\n\n"
-                      + "MXQ PRO RK322A"
+              private TextView text(String value, int size, int color) {
+                  TextView t = new TextView(this);
+                  t.setText(value);
+                  t.setTextSize(size);
+                  t.setTextColor(color);
+                  t.setGravity(Gravity.CENTER);
+                  return t;
+              }
+
+              private LinearLayout vertical() {
+                  LinearLayout l = new LinearLayout(this);
+                  l.setOrientation(LinearLayout.VERTICAL);
+                  return l;
+              }
+
+              private LinearLayout horizontal() {
+                  LinearLayout l = new LinearLayout(this);
+                  l.setOrientation(LinearLayout.HORIZONTAL);
+                  l.setGravity(Gravity.CENTER);
+                  return l;
+              }
+
+              private LinearLayout.LayoutParams params(
+                  int width, int height, float weight) {
+                  return new LinearLayout.LayoutParams(
+                      width, height, weight
                   );
-
-                  setContentView(tv);
               }
 
-              @Override
-              public void onBackPressed() {
-                  // Tetap di launcher
+              private void buildInterface() {
+
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.setBackgroundColor(BLACK);
+
+                  LinearLayout root = vertical();
+                  root.setPadding(30, 22, 30, 28);
+
+                  scroll.addView(root);
+
+                  TextView brand = text(
+                      "✦  MXQ PRO ISLAMI  ✦",
+                      24, GOLD
+                  );
+                  brand.setTypeface(null, Typeface.BOLD);
+                  root.addView(brand, params(-1, 55, 0));
+
+                  clock = text("--:--:--", 68, GOLD);
+                  clock.setTypeface(null, Typeface.BOLD);
+                  root.addView(clock, params(-1, 95, 0));
+
+                  date = text(
+                      new SimpleDateFormat(
+                          "EEEE, dd MMMM yyyy",
+                          new Locale("id", "ID")
+                      ).format(new Date()),
+                      19, WHITE
+                  );
+                  root.addView(date, params(-1, 35, 0));
+
+                  hijri = text("Kalender Hijriah: Memuat...", 16, MUTED);
+                  root.addView(hijri, params(-1, 32, 0));
+
+                  TextView heading = text(
+                      "JADWAL SHOLAT - BEKASI",
+                      21, GOLD
+                  );
+                  heading.setTypeface(null, Typeface.BOLD);
+                  heading.setPadding(0, 20, 0, 12);
+                  root.addView(heading);
+
+                  prayer = text(
+                      "Memuat jadwal sholat...",
+                      17, WHITE
+                  );
+                  prayer.setPadding(10, 20, 10, 20);
+                  prayer.setBackground(background(PANEL));
+                  root.addView(prayer, params(-1, 95, 0));
+
+                  TextView menuTitle = text(
+                      "MENU ISLAMI",
+                      21, GOLD
+                  );
+                  menuTitle.setTypeface(null, Typeface.BOLD);
+                  menuTitle.setPadding(0, 24, 0, 12);
+                  root.addView(menuTitle);
+
+                  LinearLayout menus = horizontal();
+
+                  addMenu(menus, "AL-QUR'AN", 0);
+                  addMenu(menus, "APLIKASI", 1);
+                  addMenu(menus, "PENGATURAN", 2);
+
+                  root.addView(menus, params(-1, 85, 0));
+
+                  TextView appsTitle = text(
+                      "APLIKASI TERPASANG",
+                      20, GOLD
+                  );
+                  appsTitle.setTypeface(null, Typeface.BOLD);
+                  appsTitle.setPadding(0, 25, 0, 12);
+                  root.addView(appsTitle);
+
+                  GridLayout apps = new GridLayout(this);
+                  apps.setColumnCount(4);
+                  apps.setAlignmentMode(GridLayout.ALIGN_MARGINS);
+                  root.addView(apps, params(-1, -2, 0));
+
+                  loadApps(apps);
+
+                  TextView footer = text(
+                      "MXQ PRO RK322A  •  BLACK GOLD EDITION  •  V3",
+                      12, MUTED
+                  );
+                  footer.setPadding(0, 30, 0, 10);
+                  root.addView(footer);
+
+                  setContentView(scroll);
+                  handler.post(clockRunnable);
               }
-          }
-          EOF
 
-      # 7. BootReceiver
-      - name: Create BootReceiver
-        run: |
-          cat > app/src/main/java/com/mxq/islami/launcher/v2/BootReceiver.java <<'EOF'
-          package com.mxq.islami.launcher.v2;
+              private void addMenu(
+                  LinearLayout parent, String label, int action) {
 
-          import android.content.BroadcastReceiver;
-          import android.content.Context;
-          import android.content.Intent;
+                  Button b = new Button(this);
+                  b.setText(label);
+                  b.setTextColor(GOLD);
+                  b.setTextSize(13);
+                  b.setAllCaps(false);
+                  b.setBackground(background(PANEL));
+                  b.setFocusable(true);
 
-          public class BootReceiver extends BroadcastReceiver {
+                  b.setOnClickListener(v -> {
+                      if (action == 0) {
+                          openQuran();
+                      } else if (action == 1) {
+                          Intent i = new Intent(
+                              Intent.ACTION_MAIN,
+                              null
+                          );
+                          i.addCategory(
+                              Intent.CATEGORY_LAUNCHER
+                          );
+                          startActivity(
+                              Intent.createChooser(i, "Pilih aplikasi")
+                          );
+                      } else {
+                          startActivity(
+                              new Intent(
+                                  android.provider.Settings.ACTION_SETTINGS
+                              )
+                          );
+                      }
+                  });
 
-              @Override
-              public void onReceive(Context context, Intent intent) {
+                  LinearLayout.LayoutParams p =
+                      new LinearLayout.LayoutParams(0, 68, 1);
 
-                  if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+                  p.setMargins(7, 4, 7, 4);
+                  parent.addView(b, p);
+              }
 
-                      Intent launch = new Intent(context, MainActivity.class);
-                      launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                      context.startActivity(launch);
+              private void openQuran() {
+                  try {
+                      Intent i = new Intent(
+                          Intent.ACTION_VIEW,
+                          android.net.Uri.parse("https://quran.com")
+                      );
+                      startActivity(i);
+                  } catch (Exception e) {
+                      prayer.setText(
+                          "Browser tidak ditemukan di perangkat."
+                      );
                   }
               }
+
+              private void loadApps(GridLayout grid) {
+
+                  PackageManager pm = getPackageManager();
+                  Intent intent = new Intent(
+                      Intent.ACTION_MAIN, null
+                  );
+                  intent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+                  List<android.content.pm.ResolveInfo> list =
+                      pm.queryIntentActivities(intent, 0);
+
+                  int count = 0;
+
+                  for (android.content.pm.ResolveInfo info : list) {
+
+                      String packageName =
+                          info.activityInfo.packageName;
+
+                      if (packageName.equals(getPackageName())) {
+                          continue;
+                      }
+
+                      Button b = new Button(this);
+                      b.setText(
+                          info.loadLabel(pm).toString()
+                      );
+                      b.setTextSize(12);
+                      b.setTextColor(WHITE);
+                      b.setAllCaps(false);
+                      b.setBackground(background(PANEL));
+                      b.setFocusable(true);
+
+                      b.setOnClickListener(v -> {
+                          Intent launch =
+                              pm.getLaunchIntentForPackage(packageName);
+
+                          if (launch != null) {
+                              startActivity(launch);
+                          }
+                      });
+
+                      GridLayout.LayoutParams p =
+                          new GridLayout.LayoutParams();
+
+                      p.width = 0;
+                      p.height = 90;
+                      p.columnSpec =
+                          GridLayout.spec(
+                              GridLayout.UNDEFINED, 1f
+                          );
+                      p.setMargins(5, 5, 5, 5);
+
+                      grid.addView(b, p);
+                      count++;
+                  }
+
+                  if (count == 0) {
+                      TextView empty = text(
+                          "Belum ada aplikasi ditemukan",
+                          14, MUTED
+                      );
+                      grid.addView(empty);
+                  }
+              }
+
+              private void loadPrayerTimes() {
+
+                  new Thread(() -> {
+                      HttpURLConnection connection = null;
+
+                      try {
+                          URL url = new URL(
+                              "https://api.aladhan.com/v1/timings"
+                              + "?latitude=-6.2349"
+                              + "&longitude=106.9896"
+                              + "&method=20"
+                          );
+
+                          connection =
+                              (HttpURLConnection) url.openConnection();
+
+                          connection.setConnectTimeout(12000);
+                          connection.setReadTimeout(12000);
+                          connection.setRequestMethod("GET");
+
+                          JSONObject result = new JSONObject(
+                              new String(
+                                  connection.getInputStream().readAllBytes(),
+                                  "UTF-8"
+                              )
+                          );
+
+                          JSONObject data =
+                              result.getJSONObject("data");
+
+                          JSONObject times =
+                              data.getJSONObject("timings");
+
+                          JSONObject hijriDate =
+                              data.getJSONObject("date")
+                                  .getJSONObject("hijri");
+
+                          String schedule =
+                              "SUBUH  " + times.getString("Fajr")
+                              + "     DZUHUR  " + times.getString("Dhuhr")
+                              + "\nASHAR  " + times.getString("Asr")
+                              + "     MAGHRIB  " + times.getString("Maghrib")
+                              + "\nISYA  " + times.getString("Isha");
+
+                          String hijriText =
+                              hijriDate.getString("day") + " "
+                              + hijriDate.getJSONObject("month")
+                                  .getString("en") + " "
+                              + hijriDate.getString("year") + " H";
+
+                          runOnUiThread(() -> {
+                              prayer.setText(schedule);
+                              hijri.setText(
+                                  "Kalender Hijriah: " + hijriText
+                              );
+                          });
+
+                      } catch (Exception e) {
+                          runOnUiThread(() -> {
+                              prayer.setText(
+                                  "Jadwal belum tersedia.\n"
+                                  + "Periksa koneksi internet STB."
+                              );
+                              hijri.setText(
+                                  "Kalender Hijriah memerlukan internet."
+                              );
+                          });
+                      } finally {
+                          if (connection != null) {
+                              connection.disconnect();
+                          }
+                      }
+
+                  }).start();
+              }
+
+              @Override
+              protected void onDestroy() {
+                  handler.removeCallbacks(clockRunnable);
+                  super.onDestroy();
+              }
           }
           EOF
 
-      # 8. Android Manifest
+      # 7. Android Manifest
       - name: Create Android Manifest
         run: |
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-              <uses-permission
-                  android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.INTERNET" />
 
               <application
-                  android:label="Islami Launcher V2"
-                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-                  android:allowBackup="true">
+                  android:allowBackup="true"
+                  android:label="MXQ PRO ISLAMI V3"
+                  android:usesCleartextTraffic="false"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
 
                   <activity
                       android:name=".MainActivity"
@@ -214,39 +537,32 @@ jobs:
 
                   </activity>
 
-                  <receiver
-                      android:name=".BootReceiver"
-                      android:enabled="true"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.BOOT_COMPLETED" />
-                      </intent-filter>
-
-                  </receiver>
-
               </application>
           </manifest>
           EOF
 
-      # 9. Build APK
-      - name: Build APK
+      # 8. Build APK
+      - name: Build Debug APK
         run: |
           gradle --version
           gradle clean
           gradle assembleDebug --no-daemon --stacktrace
 
-      # 10. Verify APK
+      # 9. Verify APK
       - name: Verify APK
         run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          set -e
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          mkdir -p release
+          cp "$APK" release/MXQ-Pro-Islami-Launcher-V3.apk
+          ls -lh release/MXQ-Pro-Islami-Launcher-V3.apk
 
-      # 11. Upload APK
+      # 10. Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MXQ-Pro-Islami-Launcher-V2
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: MXQ-Pro-Islami-Launcher-V3-BLACK-GOLD
+          path: release/MXQ-Pro-Islami-Launcher-V3.apk
           if-no-files-found: error
           retention-days: 30
